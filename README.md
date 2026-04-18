@@ -1,7 +1,5 @@
-# Tauri + SvelteKit + TypeScript
+# 多功能桌面工具
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+这是一个基于 Tauri, SvelteKit and TypeScript in Vite 制作的多功能桌面工具，用于管理每天要处理的任务。
 
-## Recommended IDE Setup
-
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+目前完成的功能有： 待办事项管理， markdown 编辑器
