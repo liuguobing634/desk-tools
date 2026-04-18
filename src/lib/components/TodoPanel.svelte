@@ -2,6 +2,16 @@
   import { loadTodos, saveTodos } from "$lib/services/todo";
   import type { FilterType, TodoItem } from "$lib/types/workbench";
 
+  function getLocalYMD(d: Date = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  let todayYMD = getLocalYMD();
+  let currentDate = $state(todayYMD);
+
   let newTodo = $state("");
   let todos = $state<TodoItem[]>([]);
   let filter = $state<FilterType>("all");
@@ -9,8 +19,19 @@
   let errorMessage = $state("");
   let showHistory = $state(false);
 
-  const activeTodos = $derived(todos.filter(t => !t.archived));
-  const archivedTodos = $derived(todos.filter(t => t.archived));
+  const activeTodos = $derived(todos.filter(t => !t.archived && t.date === currentDate));
+  const archivedTodos = $derived([...todos.filter(t => t.archived)].sort((a, b) => {
+    const dateA = a.date || "";
+    const dateB = b.date || "";
+    if (dateA !== dateB) return dateB > dateA ? 1 : -1;
+    return b.createdAt - a.createdAt;
+  }));
+
+  function changeDate(days: number) {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + days);
+    currentDate = getLocalYMD(d);
+  }
 
   const filteredTodos = $derived.by(() => {
     if (filter === "active") {
@@ -32,7 +53,33 @@
     errorMessage = "";
 
     try {
-      todos = await loadTodos();
+      const loaded = await loadTodos();
+      let modified = false;
+
+      const nextTodos = loaded.map(t => {
+        let changed = false;
+        let tDate = t.date;
+        let tArchived = t.archived;
+
+        if (!tDate) {
+          tDate = getLocalYMD(new Date(t.createdAt));
+          changed = true;
+          if (!tArchived) {
+            tArchived = true;
+          }
+        }
+
+        if (changed) {
+          modified = true;
+          return { ...t, date: tDate, archived: tArchived };
+        }
+        return t;
+      });
+
+      todos = nextTodos;
+      if (modified) {
+        await saveTodos(todos);
+      }
     } catch (error) {
       errorMessage = `读取待办数据失败：${String(error)}`;
     } finally {
@@ -67,7 +114,8 @@
         id: crypto.randomUUID(),
         text,
         done: false,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        date: currentDate
       },
       ...todos
     ];
@@ -88,7 +136,7 @@
 
   async function archiveCompleted() {
     const nextTodos = todos.map((todo) => 
-      !todo.archived && todo.done ? { ...todo, archived: true } : todo
+      !todo.archived && todo.done && todo.date === currentDate ? { ...todo, archived: true } : todo
     );
     await persistTodos(nextTodos);
   }
@@ -107,8 +155,18 @@
 <section class="panel">
   <div class="panel-header">
     <div>
-      <h2>待办清单</h2>
-      <p class="panel-tip">管理每天要处理的任务，数据保存在本地 JSON 文件中。</p>
+      <div class="header-title">
+        <h2>待办清单</h2>
+        <div class="date-picker">
+          <button class="icon-btn" onclick={() => changeDate(-1)} aria-label="上一天" disabled={loading}>◀</button>
+          <input type="date" bind:value={currentDate} disabled={loading} />
+          <button class="icon-btn" onclick={() => changeDate(1)} aria-label="下一天" disabled={loading}>▶</button>
+          {#if currentDate !== todayYMD}
+            <button class="today-btn" onclick={() => currentDate = todayYMD}>回到今天</button>
+          {/if}
+        </div>
+      </div>
+      <p class="panel-tip">管理每日任务，按天规划你的工作。</p>
     </div>
 
     <div class="stats">
@@ -233,6 +291,9 @@
               <li class="done">
                 <label class="todo-row">
                   <input type="checkbox" checked disabled />
+                  {#if todo.date}
+                    <span class="date-badge">{todo.date}</span>
+                  {/if}
                   <span>{todo.text}</span>
                 </label>
                 <div class="archived-actions">
@@ -293,6 +354,50 @@
     align-items: flex-start;
     gap: 20px;
     margin-bottom: 24px;
+  }
+
+  .header-title {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .date-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .date-picker input[type="date"] {
+    padding: 4px 8px;
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--text-main);
+    font-family: inherit;
+    height: 32px;
+  }
+
+  .icon-btn {
+    min-height: 32px;
+    width: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--bg-button);
+    color: var(--text-main-alt);
+  }
+
+  .today-btn {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    background: var(--bg-primary-btn);
+    color: white;
   }
 
   .panel-tip {
@@ -478,6 +583,16 @@
   .archived-actions {
     display: flex;
     gap: 8px;
+  }
+
+  .date-badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--bg-panel-light);
+    color: var(--text-muted);
+    border: 1px solid var(--border-light);
+    white-space: nowrap;
   }
 
   /* 模态框及分组样式 */

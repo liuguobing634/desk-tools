@@ -4,6 +4,7 @@ export type TodoItem = {
   done: boolean;
   createdAt: number;
   archived?: boolean;
+  date?: string;
 };
 
 export type FilterType = "all" | "active" | "completed";
