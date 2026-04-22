@@ -349,6 +349,20 @@
     document.body.style.cursor = '';
   }
 
+  function exportPdf() {
+    if (!selectedNoteId) return;
+    
+    // 如果当前是纯编辑模式，先切换到分栏或预览模式以便渲染出预览 DOM
+    if (noteViewMode === "edit") {
+      noteViewMode = "preview";
+    }
+    
+    // 给 Svelte 一点时间更新 DOM，然后调用浏览器原生的打印功能
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
   fetchNotes();
   fetchGroups();
 </script>
@@ -380,6 +394,17 @@
           分栏
         </button>
       </div>
+
+      <button type="button" class="export-pdf-btn" onclick={exportPdf} disabled={noteLoading || !selectedNoteId} title="通过系统打印对话框另存为 PDF">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle;">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        导出 PDF
+      </button>
 
       <button type="button" onclick={saveNote} disabled={noteLoading || noteSaving || !noteDirty || !selectedNoteId}>
         {noteSaving ? "保存中..." : "保存笔记"}
@@ -620,6 +645,97 @@
   .note-meta {
     display: flex;
     align-items: center;
+  }
+
+  .export-pdf-btn {
+    display: flex;
+    align-items: center;
+    background: var(--bg-button);
+    color: var(--text-main);
+    border: 1px solid var(--border-input);
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .export-pdf-btn:hover:enabled {
+    background: var(--bg-active-btn);
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  /* 打印/导出 PDF 专用样式 */
+  @media print {
+    /* 隐藏不需要打印的区域 */
+    .panel-header,
+    .notes-sidebar,
+    .resizer,
+    .note-meta,
+    .pane-title,
+    :global(.hero) {
+      display: none !important;
+    }
+
+    /* 调整主体布局，使其占满整个纸张 */
+    .notes-workspace {
+      display: block !important;
+      width: 100% !important;
+      grid-template-columns: none !important;
+      gap: 0 !important;
+    }
+
+    .note-main {
+      width: 100% !important;
+      overflow: visible !important;
+      height: auto !important;
+    }
+
+    .note-layout {
+      display: block !important;
+      overflow: visible !important;
+      height: auto !important;
+    }
+
+    /* 隐藏编辑器，只保留预览区 */
+    .note-editor {
+      display: none !important;
+    }
+
+    .note-pane {
+      border: none !important;
+      padding: 0 !important;
+      background: transparent !important;
+      overflow: visible !important;
+      height: auto !important;
+    }
+
+    .markdown-preview {
+      display: block !important;
+      width: 100% !important;
+      height: auto !important;
+      overflow: visible !important;
+      color: black !important;
+      background: white !important;
+    }
+
+    /* 保证背景和文字颜色适合打印 */
+    :global(body) {
+      background: white !important;
+      color: black !important;
+    }
+
+    :global(.page),
+    :global(.workspace) {
+      padding: 0 !important;
+      margin: 0 !important;
+      min-height: auto !important;
+      width: 100% !important;
+    }
+
+    .panel {
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      background: transparent !important;
+    }
   }
 
   .panel-header {
