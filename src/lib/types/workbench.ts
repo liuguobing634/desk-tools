@@ -44,3 +44,17 @@ export type GroupedNotes = {
   group: NoteGroup;
   notes: NoteSummary[];
 }[];
+
+export type StorageMode = "local" | "minio";
+
+export type MinioConfig = {
+  endpoint: string;
+  bucket: string;
+  accessKey: string;
+  secretKey: string;
+};
+
+export type AppSettings = {
+  storageMode: StorageMode;
+  minio?: MinioConfig | null;
+};

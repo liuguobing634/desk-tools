@@ -3,6 +3,7 @@
   import { importImage } from "$lib/services/note";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import NoteGroupManager from "$lib/components/NoteGroupManager.svelte";
+  import SettingsModal from "$lib/components/SettingsModal.svelte";
   import type { NoteDocument, NoteSummary, NoteViewMode, NoteGroup, GroupedNotes } from "$lib/types/workbench";
 
   let notes = $state<NoteSummary[]>([]);
@@ -23,6 +24,7 @@
   let groups = $state<NoteGroup[]>([]);
   let selectedGroupId = $state<string | null>(null);
   let showGroupManager = $state(false);
+  let showSettings = $state(false);
   let groupLoading = $state(true);
 
   // 侧边栏宽度控制
@@ -283,7 +285,10 @@
     try {
       const imagePath = await importImage();
       if (imagePath) {
-        const url = convertFileSrc(imagePath);
+        // MinIO storage returns HTTP URLs, local storage returns filesystem paths
+        const url = imagePath.startsWith("http://") || imagePath.startsWith("https://")
+          ? imagePath
+          : convertFileSrc(imagePath);
         const imgMarkdown = `![图片](${url})`;
 
         if (textareaRef) {
@@ -439,6 +444,12 @@
           </button>
           <button type="button" class="text-button" onclick={toggleGroupManager} disabled={noteListLoading || noteSaving}>
             分组管理
+          </button>
+          <button type="button" class="text-button" onclick={() => (showSettings = !showSettings)} title="设置">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
           </button>
         </div>
       </div>
@@ -616,6 +627,10 @@
 
 {#if showGroupManager}
   <NoteGroupManager onclose={toggleGroupManager} />
+{/if}
+
+{#if showSettings}
+  <SettingsModal onclose={() => (showSettings = false)} />
 {/if}
 
 <style>
