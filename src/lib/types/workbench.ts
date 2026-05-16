@@ -58,3 +58,10 @@ export type AppSettings = {
   storageMode: StorageMode;
   minio?: MinioConfig | null;
 };
+
+export type SyncResult = {
+  uploaded: number;
+  downloaded: number;
+  skipped: number;
+  errors: string[];
+};

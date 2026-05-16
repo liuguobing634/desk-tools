@@ -114,6 +114,7 @@
     noteSaveMessage = "";
 
     try {
+      console.log('id,', id)
       const document = await loadNote(id);
       applyNoteDocument(document);
     } catch (error) {

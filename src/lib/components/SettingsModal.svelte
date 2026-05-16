@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { getSettings, updateSettings } from "$lib/services/settings";
-  import type { AppSettings, StorageMode } from "$lib/types/workbench";
+  import { getSettings, updateSettings, syncNotes } from "$lib/services/settings";
+  import type { AppSettings, StorageMode, SyncResult } from "$lib/types/workbench";
 
   let { onclose } = $props<{ onclose: () => void }>();
 
@@ -13,6 +13,8 @@
   let saving = $state(false);
   let error = $state("");
   let message = $state("");
+  let syncing = $state(false);
+  let syncResult = $state<SyncResult | null>(null);
 
   async function fetchSettings() {
     loading = true;
@@ -58,6 +60,20 @@
       error = `保存设置失败：${String(err)}`;
     } finally {
       saving = false;
+    }
+  }
+
+  async function handleSync() {
+    syncing = true;
+    error = "";
+    message = "";
+    syncResult = null;
+    try {
+      syncResult = await syncNotes();
+    } catch (err) {
+      error = `同步失败：${String(err)}`;
+    } finally {
+      syncing = false;
     }
   }
 
@@ -178,6 +194,52 @@
                 bind:value={secretKey}
                 placeholder="输入 Secret Key"
               />
+            </div>
+
+            <div class="sync-section">
+              <button
+                type="button"
+                class="sync-btn"
+                onclick={handleSync}
+                disabled={syncing}
+              >
+                {#if syncing}
+                  <span class="spinner"></span>
+                  同步中...
+                {:else}
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                  </svg>
+                  同步本地与 MinIO
+                {/if}
+              </button>
+
+              {#if syncResult}
+                <div class="sync-result">
+                  <div class="sync-stats">
+                    <span class="stat uploaded">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                      上传 {syncResult.uploaded}
+                    </span>
+                    <span class="stat downloaded">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                      下载 {syncResult.downloaded}
+                    </span>
+                    <span class="stat skipped">
+                      跳过 {syncResult.skipped}
+                    </span>
+                  </div>
+                  {#if syncResult.errors.length > 0}
+                    <div class="sync-errors">
+                      {#each syncResult.errors as err}
+                        <p>{err}</p>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
           </div>
         {/if}
@@ -449,5 +511,110 @@
   :global(body[data-theme="dark"]) .success-message {
     color: #a7f3d0;
     background: rgba(6, 78, 59, 0.2);
+  }
+
+  .sync-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-light);
+  }
+
+  .sync-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px dashed var(--border-dashed);
+    border-radius: 12px;
+    background: var(--bg-panel-lighter);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+    min-height: 42px;
+  }
+
+  .sync-btn:hover:enabled {
+    border-color: var(--text-accent);
+    color: var(--text-accent);
+    background: rgba(147, 197, 253, 0.06);
+  }
+
+  .sync-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .sync-result {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--bg-panel-lighter);
+  }
+
+  .sync-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .stat.uploaded {
+    color: #10b981;
+  }
+
+  :global(body[data-theme="dark"]) .stat.uploaded {
+    color: #a7f3d0;
+  }
+
+  .stat.downloaded {
+    color: #3b82f6;
+  }
+
+  :global(body[data-theme="dark"]) .stat.downloaded {
+    color: #93c5fd;
+  }
+
+  .sync-errors {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sync-errors p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #ef4444;
+    word-break: break-all;
+  }
+
+  :global(body[data-theme="dark"]) .sync-errors p {
+    color: #fca5a5;
   }
 </style>

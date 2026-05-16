@@ -7,6 +7,12 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    env_logger::init();
+
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("failed to install rustls crypto provider");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -39,6 +45,7 @@ pub fn run() {
             commands::note::import_image,
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::sync::sync_notes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

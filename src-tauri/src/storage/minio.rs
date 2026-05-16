@@ -173,30 +173,26 @@ impl StorageBackend for MinioStorage {
     }
 
     fn object_exists(&self, key: &str) -> Result<bool, String> {
-        match self.bucket.head_object(key) {
-            Ok((_, code)) => Ok(code == 200),
+        match self.bucket.get_object(key) {
+            Ok(data) => Ok(data.status_code() == 200),
             Err(_) => Ok(false),
         }
     }
 
     fn get_object_info(&self, key: &str) -> Result<ObjectInfo, String> {
-        let (head, code) = self
+        let data = self
             .bucket
-            .head_object(key)
-            .map_err(|e| format!("MinIO head_object 失败: {e}"))?;
+            .get_object(key)
+            .map_err(|e| format!("MinIO get_object 失败: {e}"))?;
 
-        if code != 200 {
+        if data.status_code() != 200 {
             return Err("对象不存在".to_string());
         }
 
         Ok(ObjectInfo {
             key: key.to_string(),
-            updated_at: head
-                .last_modified
-                .as_deref()
-                .map(|s| Self::parse_last_modified(s))
-                .unwrap_or(0),
-            size: head.content_length.unwrap_or(0) as u64,
+            updated_at: 0,
+            size: data.to_vec().len() as u64,
         })
     }
 

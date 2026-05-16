@@ -180,6 +180,7 @@ pub fn load_note(
     id: String,
 ) -> Result<NoteDocument, String> {
     let key = note_key(&id);
+    log::debug!("load_note: id={id}, key={key}");
 
     if !storage.object_exists(&key)? {
         return Err("笔记不存在".to_string());
@@ -190,6 +191,7 @@ pub fn load_note(
     let content =
         String::from_utf8(content_bytes).map_err(|error| format!("解析笔记内容失败: {error}"))?;
 
+    log::debug!("load_note: loaded key={key}, size={}", content.len());
     build_note_document(&key, &content, info.updated_at)
 }
 
