@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { createNote, deleteNote, listNotes, loadNote, renderMarkdown, saveNote as persistNote, listNoteGroups, moveNoteToGroup } from "$lib/services/note";
   import { importImage } from "$lib/services/note";
   import { convertFileSrc } from "@tauri-apps/api/core";
@@ -16,8 +16,13 @@
   let noteSaving = $state(false);
   let noteListLoading = $state(true);
   let noteError = $state("");
-  let noteSaveMessage = $state("");
-  let createTitle = $state("");
+ let noteSaveMessage = $state("");
+ // Auto-save state
+ let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+ let lastAutoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+ let isAutoSaving = $state(false);
+ let lastAutoSaved = $state(false);
+ let createTitle = $state("");
   let createGroupId = $state<string | null>(null);
   let showCreateModal = $state(false);
   let selectedDeleteIds = $state<string[]>([]);
@@ -108,10 +113,20 @@
     }
   }
 
-  async function openNote(id: string) {
-    noteLoading = true;
-    noteError = "";
-    noteSaveMessage = "";
+ async function openNote(id: string) {
+    // Cancel any pending auto-save before switching notes
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+    if (lastAutoSaveTimer) {
+      clearTimeout(lastAutoSaveTimer);
+      lastAutoSaveTimer = null;
+    }
+    lastAutoSaved = false;
+   noteLoading = true;
+   noteError = "";
+   noteSaveMessage = "";
 
     try {
       console.log('id,', id)
@@ -152,8 +167,13 @@
     createGroupId = null;
   }
 
-  async function saveNote() {
-    if (!selectedNoteId) {
+ async function saveNote() {
+    // Cancel pending auto-save so manual save takes priority
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+   if (!selectedNoteId) {
       return;
     }
 
@@ -318,13 +338,70 @@
     }
   }
 
-  function resetNoteMessage() {
-    if (noteSaveMessage) {
-      noteSaveMessage = "";
+ function resetNoteMessage() {
+   if (noteSaveMessage) {
+     noteSaveMessage = "";
+   }
+ }
+
+  async function performAutoSave() {
+    if (!selectedNoteId || !noteDirty || noteSaving) return;
+
+    isAutoSaving = true;
+    try {
+      const document = await persistNote(selectedNoteId, noteDraft);
+      applyNoteDocument(document);
+      notes = notes
+        .map((note) =>
+          note.id === document.id
+            ? {
+                groupId: document.groupId ?? null,
+                id: document.id,
+                title: document.title,
+                fileName: document.fileName,
+                updatedAt: document.updatedAt,
+              }
+            : note
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      lastAutoSaved = true;
+      if (lastAutoSaveTimer) clearTimeout(lastAutoSaveTimer);
+      lastAutoSaveTimer = setTimeout(() => {
+        lastAutoSaved = false;
+      }, 2500);
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      isAutoSaving = false;
     }
   }
 
-  function handlePointerDown(e: PointerEvent) {
+  $effect(() => {
+    const draft = noteDraft;
+    const id = selectedNoteId;
+    const saved = noteSavedContent;
+
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+
+    if (id && draft !== saved) {
+      autoSaveTimer = setTimeout(() => {
+        if (noteSaving) return;
+        performAutoSave();
+      }, 1500);
+    }
+
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+      }
+    };
+  });
+
+ function handlePointerDown(e: PointerEvent) {
     // 仅响应鼠标左键
     if (e.button !== 0) return;
     isDragging = true;
@@ -549,6 +626,11 @@
             <section class="note-pane">
               <div class="pane-title">
                 {noteTitle || "编辑区"}
+                {#if isAutoSaving}
+                  <span class="auto-save-indicator saving">自动保存中...</span>
+                {:else if lastAutoSaved}
+                  <span class="auto-save-indicator saved">已自动保存</span>
+                {/if}
                 <button type="button" class="btn btn-sm btn-outline import-img-btn" onclick={handleImportImage} disabled={noteSaving} title="插入本地图片">
                   <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -563,7 +645,7 @@
                 bind:value={noteDraft}
                 class="note-editor"
                 placeholder="# 我的笔记&#10;&#10;- 支持 Markdown 编辑&#10;- 支持本地文件保存&#10;- 支持预览"
-                disabled={noteSaving}
+                disabled={!selectedNoteId || noteLoading}
                 oninput={resetNoteMessage}
               ></textarea>
             </section>
@@ -1095,6 +1177,28 @@
   .import-img-btn:hover:enabled {
     background: rgba(147, 197, 253, 0.1);
     border-color: var(--border-focus);
+  }
+
+  .auto-save-indicator {
+    font-size: 0.78rem;
+    padding: 2px 10px;
+    border-radius: 10px;
+    animation: auto-save-fade 0.2s ease-out;
+  }
+
+  .auto-save-indicator.saving {
+    color: var(--text-muted-alt);
+    background: var(--bg-panel-lighter);
+  }
+
+  .auto-save-indicator.saved {
+    color: var(--text-accent);
+    background: rgba(147, 197, 253, 0.08);
+  }
+
+  @keyframes auto-save-fade {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .note-editor {
